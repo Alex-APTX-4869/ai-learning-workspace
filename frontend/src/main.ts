@@ -1,0 +1,6 @@
+import { createApp } from 'vue'
+import './shared/styles/theme.css'
+import './shared/styles/base.css'
+import App from './App.vue'
+
+createApp(App).mount('#app')

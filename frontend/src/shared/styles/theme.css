@@ -1,0 +1,20 @@
+:root {
+  --canvas: #f8fafc;
+  --surface: #ffffff;
+  --soft: #f5f8fb;
+  --ink: #283440;
+  --body: #485866;
+  --muted: #6c7c8b;
+  --line: #e5ebf0;
+  --accent: #55758d;
+  --danger: #a34247;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
