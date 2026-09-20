@@ -2,7 +2,15 @@
 export type Point = { id: number; name: string; intro: string; content_markdown: string | null }
 export type Section = { id: number; name: string; points: Point[] }
 export type Chapter = { id: number; name: string; sections: Section[] }
-export type Course = { id: number; name: string; intro: string; chapters: Chapter[] }
+export type Course = {
+  id: number
+  name: string
+  intro: string
+  outline_version_id: number | null
+  directory_origin?: string | null
+  intro_is_fallback?: boolean
+  chapters: Chapter[]
+}
 export type CourseInput = Pick<Course, 'name' | 'intro'>
 export type CourseTask = { label: string; chapterId?: number }
 export type CourseSummary = {

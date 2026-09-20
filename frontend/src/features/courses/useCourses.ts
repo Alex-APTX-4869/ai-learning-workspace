@@ -70,7 +70,7 @@ async function generate(courseId: number, chapterId?: number) {
     const course =
       chapterId === undefined
         ? await coursesApi.outline(courseId)
-        : await coursesApi.points(courseId, chapterId)
+        : await coursesApi.points(courseId, chapterId, details[courseId]?.outline_version_id ?? null)
     // 用返回结果自己的 ID 更新，绝不依赖此时用户正在看哪门课。
     put(course)
   } catch (cause) {
@@ -92,6 +92,7 @@ export function useCourses() {
     taskErrors,
     loadCourses,
     loadCourse,
+    rememberCourse: put,
     saveCourse,
     generate,
   }

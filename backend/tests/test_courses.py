@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from backend.ai.schemas import Chapter, CourseByAI
 from backend.app import create_app
 from backend.database import Base, get_db
-from backend.courses.models import Point, Section
+from backend.courses.models import Chapter as SavedChapter, Course, Point, Section
 
 OUTLINE = {"name": "FastAPI", "chapters": [{"name": "认识接口", "sections": [{"name": "第一个接口"}, {"name": "路径参数"}]}]}
 POINTS = {"name": "认识接口", "sections": [
@@ -25,7 +25,7 @@ class CourseTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.engine = create_engine(f"sqlite:///{self.temp.name}/test.db", connect_args={"check_same_thread": False})
         Base.metadata.create_all(self.engine)
-        app = create_app(initialize_database=False)
+        app = create_app(initialize_database=False, inline_jobs=True)
 
         def database():
             with Session(self.engine) as db:
@@ -81,12 +81,18 @@ class CourseTests(unittest.TestCase):
         self.assertEqual((summary["chapter_count"], summary["section_count"], summary["point_count"]), (1, 2, 2))
 
     def test_partial_chapter_only_fills_missing_sections(self):
-        item = self.outline(self.create()["id"])
+        course_id = self.create()["id"]
         with Session(self.engine) as db:
-            first = db.scalars(select(Section).order_by(Section.position)).first()
-            assert first is not None
-            first.points = [Point(name="原有知识点", intro="必须保留", position=0)]
+            course = db.get(Course, course_id)
+            course.chapters = [SavedChapter(name="认识接口", position=0, sections=[
+                Section(name="第一个接口", position=0,
+                        points=[Point(name="原有知识点", intro="必须保留", position=0)]),
+                Section(name="路径参数", position=1),
+            ])]
             db.commit()
+        # 先捕获这棵真实旧树，再通过版本化 API 增量展开缺失小节。
+        self.client.get(f"/courses/{course_id}/outline-versions")
+        item = self.client.get(f"/courses/{course_id}").json()
         chapter_id = item["chapters"][0]["id"]
         with patch("backend.ai.service.generate_points", return_value=Chapter.model_validate(POINTS)):
             saved = self.client.post(f'/courses/{item["id"]}/chapters/{chapter_id}/points')
@@ -118,7 +124,7 @@ class CourseTests(unittest.TestCase):
         self.assertEqual(self.client.get(f'/courses/{item["id"]}').json()["chapters"], [])
         item = self.outline(item["id"])
         invalid = Chapter.model_validate({"name": "认识接口", "sections": [{"name": "改名的小节", "points": [{"name": "错误", "intro": "不该保存"}]}]})
-        with patch("backend.ai.service.generate_json", return_value=invalid):
+        with patch("backend.ai.service.generate_json_messages", return_value=invalid):
             reply = self.client.post(f'/courses/{item["id"]}/chapters/{item["chapters"][0]["id"]}/points')
             self.assertEqual(reply.status_code, 502)
         self.assertEqual(self.client.get(f'/courses/{item["id"]}').json(), item)

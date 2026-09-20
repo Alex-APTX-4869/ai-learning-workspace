@@ -1,5 +1,9 @@
 # Python
 .venv/
+.venv-materials/
+.material-work/
+.material-storage/
+tmp/
 __pycache__/
 *.py[cod]
 

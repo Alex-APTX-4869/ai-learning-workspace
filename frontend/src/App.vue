@@ -3,6 +3,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import CourseLibrary from './pages/CourseLibrary.vue'
 import CourseWorkspace from './pages/CourseWorkspace.vue'
 import CourseFormDialog from './features/courses/components/CourseFormDialog.vue'
+import SidebarCourseList from './features/courses/components/SidebarCourseList.vue'
+import CourseIntakeDialog from './features/intake/components/CourseIntakeDialog.vue'
+import ModelSettingsDialog from './features/settings/components/ModelSettingsDialog.vue'
 import AppIcon from './shared/components/AppIcon.vue'
 import { useCourses } from './features/courses/useCourses'
 import { useCourseNavigation } from './shared/useCourseNavigation'
@@ -19,6 +22,7 @@ const {
   taskErrors,
   loadCourses,
   loadCourse,
+  rememberCourse,
   generate,
 } = useCourses()
 const { courseId, navigate } = useCourseNavigation()
@@ -28,6 +32,8 @@ const courseTitle = computed(
     course.value?.name || courses.value.find((item) => item.id === courseId.value)?.name || '课程',
 )
 const formOpen = ref(false)
+const intakeOpen = ref(false)
+const modelSettingsOpen = ref(false)
 const editingCourse = ref<Course>()
 onMounted(() => {
   loadCourses()
@@ -36,12 +42,17 @@ onMounted(() => {
 watch(courseId, (id) => {
   if (id !== null) loadCourse(id)
 })
-function openForm(edit?: Course) {
+function openForm(edit: Course) {
   editingCourse.value = edit
   formOpen.value = true
 }
-function saved(item: Course) {
+function edited(item: Course) {
   formOpen.value = false
+  navigate(item.id)
+}
+function intakeSaved(item: Course) {
+  intakeOpen.value = false
+  rememberCourse(item)
   navigate(item.id)
 }
 </script>
@@ -57,9 +68,27 @@ function saved(item: Course) {
       <a href="#/" class="sidebar-link" :aria-current="courseId === null ? 'page' : undefined"
         ><AppIcon name="grid" />我的课程<AppIcon name="chevron"
       /></a>
-      <div class="sidebar-bottom">
-        <span class="personal-avatar">我</span
-        ><span>个人学习空间<small>按自己的节奏生长</small></span>
+      <SidebarCourseList
+        :courses="courses"
+        :current-course-id="courseId"
+        :loading="loading"
+      />
+      <div class="sidebar-footer">
+        <button
+          type="button"
+          class="sidebar-settings"
+          aria-label="打开模型与 API 设置"
+          title="模型与 API"
+          @click="modelSettingsOpen = true"
+        >
+          <AppIcon name="code" />
+          <span>模型 / API<small>多模型与职责分配</small></span>
+          <AppIcon name="chevron" />
+        </button>
+        <div class="sidebar-bottom">
+          <span class="personal-avatar">我</span
+          ><span>个人学习空间<small>按自己的节奏生长</small></span>
+        </div>
       </div>
     </aside>
     <div class="main-shell">
@@ -79,7 +108,7 @@ function saved(item: Course) {
           :loading="loading"
           :error="error"
           :tasks="tasks"
-          @create="openForm()"
+          @create="intakeOpen = true"
           @retry="loadCourses"
         />
         <div v-else-if="detailLoading[courseId]" class="loading-state" role="status">
@@ -87,12 +116,14 @@ function saved(item: Course) {
         </div>
         <CourseWorkspace
           v-else-if="course"
-          :key="course.id"
+          :key="`${course.id}:${course.outline_version_id ?? 'legacy'}`"
           :course="course"
           :task="tasks[course.id]"
           :error="taskErrors[course.id]"
           @edit="openForm(course)"
           @generate="generate(course!.id, $event)"
+          @refresh="loadCourse(course!.id, true)"
+          @version-changed="rememberCourse"
         />
         <section v-else class="empty-state page-content">
           <h1>{{ detailErrors[courseId] ? '课程暂时无法加载' : '没有找到这门课程' }}</h1>
@@ -108,10 +139,22 @@ function saved(item: Course) {
       </main>
     </div>
     <CourseFormDialog
+      v-if="editingCourse"
       :open="formOpen"
       :course="editingCourse"
       @close="formOpen = false"
-      @saved="saved"
+      @saved="edited"
+    />
+    <CourseIntakeDialog
+      :open="intakeOpen"
+      @close="intakeOpen = false"
+      @saved="intakeSaved"
+    />
+    <ModelSettingsDialog
+      :open="modelSettingsOpen"
+      :current-course-id="courseId"
+      :courses="courses"
+      @close="modelSettingsOpen = false"
     />
   </div>
 </template>
@@ -185,13 +228,53 @@ function saved(item: Course) {
   margin-left: auto;
   width: 12px;
 }
-.sidebar-bottom {
+.sidebar-footer {
   margin-top: auto;
+}
+.sidebar-settings {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+.sidebar-settings:hover {
+  border-color: var(--line);
+  background: var(--soft);
+  color: var(--ink);
+}
+.sidebar-settings > .app-icon {
+  width: 16px;
+  height: 16px;
+}
+.sidebar-settings > .app-icon:last-child {
+  width: 11px;
+  margin-left: auto;
+}
+.sidebar-settings > span {
+  min-width: 0;
+  flex: 1;
+  font-size: 11px;
+}
+.sidebar-settings small {
+  display: block;
+  margin-top: 3px;
+  color: #8a98a5;
+  font-size: 9px;
+}
+.sidebar-bottom {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-top: 7px;
   border-top: 1px solid var(--line);
-  padding: 23px 9px 0;
+  padding: 18px 9px 0;
   font-size: 12px;
 }
 .personal-avatar {
@@ -300,6 +383,22 @@ function saved(item: Course) {
   .brand small,
   .sidebar-caption,
   .sidebar-bottom {
+    display: none;
+  }
+  .sidebar-footer {
+    margin: 0 0 0 auto;
+  }
+  .sidebar-settings {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    padding: 0;
+    border-color: var(--line);
+    background: var(--soft);
+  }
+  .sidebar-settings > span,
+  .sidebar-settings > .app-icon:last-child {
     display: none;
   }
   .brand-mark {

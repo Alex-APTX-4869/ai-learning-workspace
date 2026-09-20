@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppIcon from '../shared/components/AppIcon.vue'
 import ChapterList from '../features/courses/components/ChapterList.vue'
+import CourseInfoPanel from '../features/courses/components/CourseInfoPanel.vue'
 import LearningDialog from '../features/learning/components/LearningDialog.vue'
 import MaterialsPanel from '../features/materials/components/MaterialsPanel.vue'
+import OutlineVersionPanel from '../features/outlines/components/OutlineVersionPanel.vue'
 import {
   courseCounts,
   type Chapter,
@@ -12,10 +14,15 @@ import {
   type Section,
 } from '../features/courses/types'
 const props = defineProps<{ course: Course; task?: CourseTask; error?: string }>()
-defineEmits<{ edit: []; generate: [chapterId?: number] }>()
-const mode = ref('outline')
+defineEmits<{ edit: []; generate: [chapterId: number]; refresh: []; versionChanged: [course: Course] }>()
+type WorkspaceMode = 'outline' | 'info' | 'materials'
+const mode = ref<WorkspaceMode>('outline')
 const sectionId = ref<number | null>(null)
 const chapterId = ref<number | null>(null)
+const introElement = ref<HTMLElement | null>(null)
+const infoRegion = ref<HTMLElement | null>(null)
+const introOverflow = ref(false)
+let introObserver: ResizeObserver | null = null
 const counts = computed(() => courseCounts(props.course))
 const chapter = computed(() => props.course.chapters.find((item) => item.id === chapterId.value))
 const section = computed(() => chapter.value?.sections.find((item) => item.id === sectionId.value))
@@ -23,15 +30,51 @@ function openSection(section: Section, chapter: Chapter) {
   sectionId.value = section.id
   chapterId.value = chapter.id
 }
+
+function measureIntro() {
+  const element = introElement.value
+  introOverflow.value = !!element && element.scrollHeight > element.clientHeight + 1
+}
+
+async function openCourseInfo() {
+  mode.value = 'info'
+  await nextTick()
+  infoRegion.value?.focus({ preventScroll: true })
+  infoRegion.value?.scrollIntoView({
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    block: 'start',
+  })
+}
+
+onMounted(async () => {
+  await nextTick()
+  measureIntro()
+  if (typeof ResizeObserver !== 'undefined' && introElement.value) {
+    introObserver = new ResizeObserver(measureIntro)
+    introObserver.observe(introElement.value)
+  }
+})
+watch(
+  () => props.course.intro,
+  () => nextTick(measureIntro),
+)
+onBeforeUnmount(() => introObserver?.disconnect())
 </script>
 
 <template>
   <section class="workspace-page page-content">
     <header class="workspace-heading">
       <div>
-        <p class="eyebrow">课程工作台</p>
         <h1>{{ course.name }}</h1>
-        <p class="course-intro">{{ course.intro }}</p>
+        <div class="intro-summary">
+          <p ref="introElement" class="course-intro">{{ course.intro }}</p>
+          <small v-if="course.intro_is_fallback" class="history-fallback">
+            此迁移前历史版本未保存独立简介，当前显示课程现用简介。
+          </small>
+          <button v-if="introOverflow" type="button" class="intro-more" @click="openCourseInfo">
+            查看更多
+          </button>
+        </div>
         <div class="course-meta">
           <span>{{ counts.chapters }} 章</span><span>{{ counts.sections }} 小节</span
           ><span>{{ counts.points }} 个知识点</span
@@ -43,9 +86,11 @@ function openSection(section: Section, chapter: Chapter) {
       </button>
     </header>
     <nav class="workspace-tabs" aria-label="课程页面">
-      <button :aria-pressed="mode === 'outline'" @click="mode = 'outline'">
+      <button type="button" :aria-pressed="mode === 'outline'" @click="mode = 'outline'">
         <AppIcon name="book" />课程目录</button
-      ><button :aria-pressed="mode === 'materials'" @click="mode = 'materials'">
+      ><button type="button" :aria-pressed="mode === 'info'" @click="mode = 'info'">
+        <AppIcon name="info" />课程信息</button
+      ><button type="button" :aria-pressed="mode === 'materials'" @click="mode = 'materials'">
         <AppIcon name="file" />参考资料
       </button>
     </nav>
@@ -56,31 +101,34 @@ function openSection(section: Section, chapter: Chapter) {
     </div>
     <div v-if="error" class="notice error-message" role="alert">{{ error }}</div>
     <template v-if="mode === 'outline'">
-      <div v-if="!course.chapters.length" class="outline-empty surface">
-        <div class="outline-illustration" aria-hidden="true">
-          <span>01 <i /></span><span>02 <i /></span><span>03 <i /></span>
+      <OutlineVersionPanel :course-id="course.id" @refresh="$emit('refresh')"
+        @version-changed="$emit('versionChanged', $event)" />
+      <template v-if="course.chapters.length"
+        ><div class="outline-caption">
+          <span>已制作的课程内容</span><span>点击小节，打开学习空间</span>
         </div>
-        <p class="eyebrow">先看见方向，再开始探索</p>
-        <h2>为这门课，搭起一份清晰的目录</h2>
-        <p>AI 将根据你的学习目标规划章节和小节。<br />目录就绪后，再逐章生成知识点。</p>
-        <button class="button primary" :disabled="!!task" @click="$emit('generate')">
-          <span v-if="task" class="spinner" /><AppIcon v-else name="sparkles" />{{
-            task ? '正在规划目录' : '生成课程大纲'
-          }}
-        </button>
-      </div>
-      <template v-else
-        ><div class="outline-caption"><span>课程大纲</span><span>点击小节，打开学习空间</span></div>
         <ChapterList
           :chapters="course.chapters"
           :task="task"
           @generate="$emit('generate', $event)"
           @open-section="openSection"
       /></template>
+      <div v-else class="materialization-note surface">
+        <AppIcon name="book" />
+        <div>
+          <h2>知识点内容尚未制作</h2>
+          <p>上方大纲以版本保存；确认结构后，后续步骤会基于所选版本制作知识点与讲解。</p>
+        </div>
+      </div>
     </template>
-    <MaterialsPanel v-else />
+    <div v-else-if="mode === 'info'" ref="infoRegion" class="info-region" tabindex="-1">
+      <CourseInfoPanel :course="course" />
+    </div>
+    <MaterialsPanel v-else :course-id="course.id" :outline-version-id="course.outline_version_id" />
     <LearningDialog
       v-if="section && chapter"
+      :course-id="course.id"
+      :outline-version-id="course.outline_version_id"
       :section="section"
       :chapter="chapter"
       :course-name="course.name"
@@ -107,16 +155,41 @@ h1 {
   font-size: 32px;
   font-weight: 500;
   line-height: 1.5;
-  margin: 14px 0;
+  margin: 0 0 12px;
   overflow-wrap: anywhere;
 }
+.intro-summary {
+  max-width: 680px;
+}
 .course-intro {
+  display: -webkit-box;
+  max-height: calc(1.95em * 3);
+  overflow: hidden;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.95;
-  max-width: 680px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
   white-space: pre-line;
   overflow-wrap: anywhere;
+}
+.intro-more {
+  margin-top: 5px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+}
+.history-fallback {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.intro-more:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .course-meta {
   display: flex;
@@ -139,7 +212,7 @@ h1 {
 .workspace-tabs {
   display: flex;
   gap: 30px;
-  margin: 38px 0 28px;
+  margin: 38px 0 10px;
   border-bottom: 1px solid var(--line);
 }
 .workspace-tabs button {
@@ -173,48 +246,28 @@ h1 {
   color: var(--ink);
   font-size: 14px;
 }
-.outline-empty {
-  text-align: center;
-  padding: 42px 24px;
-}
-.outline-empty h2 {
-  font-size: 21px;
-  margin: 14px 0;
-}
-.outline-empty > p:not(.eyebrow) {
-  font-size: 13px;
-  line-height: 2;
-  color: var(--muted);
-  margin-bottom: 26px;
-}
-.outline-illustration {
-  width: 165px;
-  margin: 0 auto 30px;
-  text-align: left;
-}
-.outline-illustration > span {
+.materialization-note {
   display: flex;
-  align-items: center;
-  gap: 15px;
-  font-size: 11px;
-  color: #7c94a7;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 20px 22px;
+  color: var(--muted);
+}
+.materialization-note > .app-icon {
+  width: 20px;
+  color: var(--accent);
+}
+.materialization-note h2 {
   margin-bottom: 5px;
-  background: var(--soft);
+  color: var(--ink);
+  font-size: 14px;
 }
-.outline-illustration i {
-  height: 4px;
-  width: 90px;
-  border-radius: 2px;
-  background: #dce5eb;
+.materialization-note p {
+  font-size: 11px;
+  line-height: 1.8;
 }
-.outline-illustration > span:nth-child(2) {
-  margin-left: 13px;
-}
-.outline-illustration > span:nth-child(3) {
-  margin-left: 26px;
+.info-region {
+  scroll-margin-top: 20px;
 }
 @media (max-width: 640px) {
   .workspace-heading {
@@ -225,13 +278,17 @@ h1 {
     font-size: 26px;
   }
   .workspace-tabs {
+    gap: 16px;
     margin-top: 28px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .workspace-tabs button {
+    flex-shrink: 0;
+    font-size: 12px;
   }
   .outline-caption {
     font-size: 11px;
-  }
-  .outline-empty h2 {
-    font-size: 18px;
   }
 }
 </style>

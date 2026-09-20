@@ -1,0 +1,11 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>隔离验收 · 视觉转录采用</title></head>
+<body><h1>隔离验收：合成页面、模型替身，不代表识别质量</h1><div id="fixture"></div>
+<script type="module">
+import {createApp,h} from 'vue'
+import MaterialsUploadPanel from '/src/features/materials/components/MaterialsUploadPanel.vue'
+const response=await fetch('/api/fixture-adoption')
+if(!response.ok)throw new Error('Only use with the isolated fixture backend')
+const {batch_id}=await response.json()
+localStorage.setItem('learning-space.material-draft',batch_id)
+createApp({render:()=>h(MaterialsUploadPanel,{name:'Test course',intro:'Learn from materials'})}).mount('#fixture')
+</script><style>body{margin:30px;font-family:system-ui;--surface:#fff;--soft:#f4f7f9;--line:#dce4ec;--ink:#293440;--muted:#768697;--accent:#587c97;}h1{font-size:16px;}#fixture{max-width:900px;margin:auto;}*{box-sizing:border-box;}</style></body></html>

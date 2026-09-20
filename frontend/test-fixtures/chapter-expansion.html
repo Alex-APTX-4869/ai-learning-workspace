@@ -1,0 +1,15 @@
+<!doctype html><html lang="zh"><head><meta charset="UTF-8"><title>新增章节隔离验收</title></head><body><div id="app"></div>
+<script type="module">
+import {createApp, ref, h} from 'vue'
+import AddChapterDialog from '../src/features/outlines/components/AddChapterDialog.vue'
+import '../src/shared/styles/theme.css'
+import '../src/shared/styles/base.css'
+const info = await fetch('/api/fixture-expansion').then(r=>{if(!r.ok)throw new Error('隔离服务未启动');return r.json()})
+const root = `/courses/${info.course_id}/directory-drafts`
+const draft = await fetch('/api'+root,{method:'POST'}).then(r=>r.json())
+const key = `learning-space.add-chapter:${info.course_id}:${info.version_id}`
+localStorage.setItem(key,draft.id)
+localStorage.setItem(key+':idea',JSON.stringify({name:'新章',requirements:'根据追加资料学习'}))
+localStorage.setItem(`${key}:materials:${draft.id}`,info.batch_id)
+createApp({setup(){const done=ref(false);return ()=> done.value ? h('h1','新章节已发布 · 原目录保留') : h(AddChapterDialog,{courseId:info.course_id,versionId:info.version_id,onPublished:()=>done.value=true})}}).mount('#app')
+</script></body></html>

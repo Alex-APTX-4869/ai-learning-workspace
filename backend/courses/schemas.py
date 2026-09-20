@@ -38,6 +38,9 @@ class CourseRead(ReadModel):
     id: int
     name: str
     intro: str
+    outline_version_id: int | None = None
+    directory_origin: str | None = None
+    intro_is_fallback: bool = False
     chapters: list[ChapterRead]
 
 

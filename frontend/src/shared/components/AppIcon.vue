@@ -14,6 +14,7 @@ defineProps<{
     | 'edit'
     | 'code'
     | 'grid'
+    | 'info'
 }>()
 const paths: Record<string, string> = {
   book: 'M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1Zm0 0v14',
@@ -29,6 +30,7 @@ const paths: Record<string, string> = {
   edit: 'm15 4 5 5M4 20l5-1L21 7l-5-5L4 14v6Z',
   code: 'm8 6-6 6 6 6m8-12 6 6-6 6m-3-16-2 20',
   grid: 'M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z',
+  info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-11v6m0-10h.01',
 }
 </script>
 

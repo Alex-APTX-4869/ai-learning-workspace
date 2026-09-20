@@ -6,6 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "test:learning": "node scripts/check-learning.mjs",
+    "test:materials": "node scripts/check-materials.mjs",
+    "test:autosave": "node scripts/check-annotation-autosave.mjs",
+    "test:document-settings": "node scripts/check-document-settings.mjs",
+    "test:page-recognition": "node scripts/check-page-recognition.mjs",
+    "test:intake-question": "node scripts/check-intake-question.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -6,7 +6,7 @@ import { errorMessage } from '../../../shared/api'
 import { useCourses } from '../useCourses'
 import type { Course } from '../types'
 
-const props = defineProps<{ open: boolean; course?: Course }>()
+const props = defineProps<{ open: boolean; course: Course }>()
 const emit = defineEmits<{ close: []; saved: [course: Course] }>()
 const name = ref(''),
   intro = ref(''),
@@ -18,11 +18,12 @@ watch(
   () => props.open,
   (open) => {
     if (open) {
-      name.value = props.course?.name ?? ''
-      intro.value = props.course?.intro ?? ''
+      name.value = props.course.name
+      intro.value = props.course.intro
       error.value = ''
     }
   },
+  { immediate: true },
 )
 async function submit() {
   if (!valid.value || saving.value) return
@@ -31,7 +32,7 @@ async function submit() {
   try {
     const course = await saveCourse(
       { name: name.value.trim(), intro: intro.value.trim() },
-      props.course?.id,
+      props.course.id,
     )
     emit('saved', course)
   } catch (cause) {
@@ -48,7 +49,7 @@ async function submit() {
       <header class="form-heading">
         <div>
           <p class="eyebrow">一门课程，一次新的探索</p>
-          <h2 id="course-form-title">{{ course ? '编辑课程信息' : '创建课程' }}</h2>
+          <h2 id="course-form-title">编辑课程信息</h2>
         </div>
         <button
           type="button"
@@ -80,20 +81,14 @@ async function submit() {
         required
         :disabled="saving"
       />
-      <p class="field-hint">
-        {{
-          course
-            ? '修改课程信息不会自动改写已生成的目录和知识点。'
-            : '创建后进入课程，让 AI 为你规划章节和小节。'
-        }}
-      </p>
+      <p class="field-hint">修改课程信息不会自动改写已生成的目录和知识点。</p>
       <p v-if="error" class="error-message" role="alert">{{ error }}</p>
       <footer>
         <button type="button" class="button secondary" :disabled="saving" @click="emit('close')">
           取消</button
         ><button class="button primary" :disabled="!valid || saving">
           <span v-if="saving" class="spinner" />{{
-            saving ? '正在保存' : course ? '保存修改' : '创建并进入'
+            saving ? '正在保存' : '保存修改'
           }}<AppIcon v-if="!saving" name="arrow" />
         </button>
       </footer>

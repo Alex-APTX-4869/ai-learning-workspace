@@ -5,15 +5,37 @@ import AppIcon from '../../../shared/components/AppIcon.vue'
 import PointNavigation from './PointNavigation.vue'
 import PointContent from './PointContent.vue'
 import type { Chapter, CourseTask, Section } from '../../courses/types'
+import { usePointContent } from '../usePointContent'
 const props = defineProps<{
+  courseId: number
+  outlineVersionId: number | null
   section: Section
   chapter: Chapter
   courseName: string
   task?: CourseTask
   error?: string
 }>()
-defineEmits<{ close: []; generate: [chapterId: number] }>()
+const emit = defineEmits<{ close: []; generate: [chapterId: number] }>()
 const selectedId = ref<number | null>(null)
+const guided = ref(true)
+const {
+  content,
+  job,
+  loading,
+  starting,
+  cancelling,
+  loadError,
+  actionError,
+  active,
+  statusText,
+  selectPoint,
+  startJob,
+  cancelJob,
+  retryJob,
+  reload,
+  stop,
+} = usePointContent()
+const immersive = computed(() => guided.value && !!content.value?.content.lesson_cards?.length)
 watch(
   () => props.section,
   (section) => {
@@ -23,28 +45,71 @@ watch(
   { immediate: true },
 )
 const point = computed(() => props.section.points.find((item) => item.id === selectedId.value))
+const nextPoint = computed(() => {
+  const index = props.section.points.findIndex((item) => item.id === selectedId.value)
+  return index >= 0 ? props.section.points[index + 1] : undefined
+})
+watch(
+  () => [props.courseId, props.outlineVersionId, point.value?.id ?? null] as const,
+  ([courseId, outlineId, pointId]) => {
+    if (pointId === null) stop()
+    else void selectPoint(courseId, outlineId, pointId)
+  },
+  { immediate: true },
+)
+
+function close() {
+  if (immersive.value) {
+    guided.value = false
+    return
+  }
+  stop()
+  emit('close')
+}
 </script>
 
 <template>
-  <BaseDialog open wide labelledby="learning-title" @close="$emit('close')">
+  <BaseDialog open wide :labelledby="immersive ? 'tutor-chat-title' : 'learning-title'" @close="close">
     <div class="learning-shell">
-      <header class="learning-header">
+      <header v-if="!immersive" class="learning-header">
         <div class="learning-heading">
           <p>{{ courseName }} <span>/</span> {{ chapter.name }}</p>
           <h1 id="learning-title">{{ section.name }}</h1>
         </div>
-        <button class="icon-button" aria-label="关闭学习弹窗" @click="$emit('close')">
+        <button type="button" class="icon-button" aria-label="关闭学习弹窗" @click="close">
           <AppIcon name="close" />
         </button>
       </header>
       <div class="learning-body">
         <PointNavigation
+          v-if="!immersive"
           :points="section.points"
           :selected-id="selectedId"
           @select="selectedId = $event"
         />
         <main class="learning-main">
-          <PointContent v-if="point" :point="point" />
+          <PointContent
+            v-if="point"
+            :course-id="courseId"
+            :guided="guided"
+            @guided-change="guided = $event"
+            :outline-version-id="outlineVersionId"
+            :next-point-name="nextPoint?.name"
+            :point="point"
+            :content="content"
+            :job="job"
+            :loading="loading"
+            :starting="starting"
+            :cancelling="cancelling"
+            :load-error="loadError"
+            :action-error="actionError"
+            :status-text="statusText"
+            @start="startJob"
+            @cancel="cancelJob"
+            @retry="retryJob"
+            @reload="reload"
+            @next-point="nextPoint && (selectedId = nextPoint.id)"
+          />
           <div v-else class="empty-state">
             <span class="empty-icon"><AppIcon name="sparkles" /></span>
             <h2>先展开这一章的知识点</h2>
@@ -52,7 +117,7 @@ const point = computed(() => props.section.points.find((item) => item.id === sel
             <button
               class="button primary"
               :disabled="!!task"
-              @click="$emit('generate', chapter.id)"
+              @click="emit('generate', chapter.id)"
             >
               <span v-if="task" class="spinner" /><AppIcon v-else name="sparkles" />{{
                 task ? task.label : '生成本章知识点'
@@ -62,8 +127,8 @@ const point = computed(() => props.section.points.find((item) => item.id === sel
           </div>
         </main>
       </div>
-      <footer class="learning-footer">
-        <span>{{ section.points.length }} 个知识点</span
+      <footer v-if="!immersive" class="learning-footer">
+        <span>{{ active ? statusText : `${section.points.length} 个知识点` }}</span
         ><span>关闭后回到课程目录 <kbd>Esc</kbd></span>
       </footer>
     </div>
@@ -77,6 +142,7 @@ const point = computed(() => props.section.points.find((item) => item.id === sel
   flex-direction: column;
 }
 .learning-header {
+  flex-shrink: 0;
   padding: 24px 28px;
   display: flex;
   justify-content: space-between;
@@ -114,7 +180,12 @@ h1 {
   min-width: 0;
   overflow-y: auto;
 }
+.learning-main:has(.point-content-guided) {
+  overflow: hidden;
+  min-height: 0;
+}
 .learning-footer {
+  flex-shrink: 0;
   padding: 12px 25px;
   border-top: 1px solid var(--line);
   display: flex;

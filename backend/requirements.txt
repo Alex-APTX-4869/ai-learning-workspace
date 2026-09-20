@@ -6,3 +6,4 @@ pydantic==2.13.4
 langchain-openai==1.5.2
 python-dotenv>=1.0,<2
 httpx>=0.28,<1
+keyring>=25,<26

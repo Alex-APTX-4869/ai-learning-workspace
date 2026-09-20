@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from backend.ai import service
@@ -18,8 +18,10 @@ def generate_course_outline(course_id: int, db: Database):
 
 
 @router.post("/courses/{course_id}/chapters/{chapter_id}/points", response_model=CourseRead)
-def generate_chapter_points(course_id: int, chapter_id: int, db: Database):
-    return service.generate_saved_points(course_id, chapter_id, db)
+def generate_chapter_points(course_id: int, chapter_id: int, db: Database,
+                            outline_version_id: int | None = Query(default=None, ge=1)):
+    return service.generate_saved_points(course_id, chapter_id, db,
+                                         outline_version_id=outline_version_id)
 
 
 # 保留旧接口，便于对照此前的学习代码。新界面使用上方带保存的接口。
